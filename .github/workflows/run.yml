@@ -24,7 +24,6 @@ jobs:
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
-          TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
+          SESSION_STRING: ${{ secrets.SESSION_STRING }}
         run: |
           python parser.py
- 
