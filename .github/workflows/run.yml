@@ -2,6 +2,7 @@ name: Run Parser
 
 on:
   workflow_dispatch:
+  push:
 
 jobs:
   run:
