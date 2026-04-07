@@ -1,24 +1,24 @@
 import asyncio
-import base64
 import json
 import os
 import re
 from datetime import datetime, timedelta, timezone
 from urllib.request import urlopen, Request
 from urllib.parse import quote
+
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 
 api_id = int(os.getenv("API_ID", "2040"))
 api_hash = os.getenv("API_HASH", "b18441a1ff607e10a989891a5462e627")
+session_string = os.getenv("SESSION_STRING", "")
 
 sources_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJXb9M9fgCWtRWdmo-8Uv3wkkwbnP6L71Nfwwt9V7HCF5zSWheBduunl0WA9gykUGWqjq6I-sqKw92/pub?gid=1276245514&single=true&output=csv"
 
-session_b64 = os.getenv("TELEGRAM_SESSION")
-if session_b64:
-    with open("session.session", "wb") as f:
-        f.write(base64.b64decode(session_b64))
-
-client = TelegramClient("session", api_id, api_hash)
+if session_string:
+    client = TelegramClient(StringSession(session_string), api_id, api_hash)
+else:
+    client = TelegramClient("session", api_id, api_hash)
 
 
 def load_key_value_csv(url):
