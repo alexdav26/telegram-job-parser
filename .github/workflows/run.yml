@@ -2,26 +2,29 @@ name: Run Parser
 
 on:
   workflow_dispatch:
-  push:
 
 jobs:
   run:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Скачать репозиторий
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Установить Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Установить зависимости
         run: |
           pip install telethon
 
-      - name: Run parser
+      - name: Запуск парсера
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
         run: |
           python parser.py
  
