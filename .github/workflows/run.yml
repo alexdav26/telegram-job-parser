@@ -2,6 +2,7 @@ name: Run Parser
 
 on:
   workflow_dispatch:
+  push:
 
 jobs:
   run:
@@ -19,6 +20,21 @@ jobs:
       - name: Установить зависимости
         run: |
           pip install telethon
+
+      - name: Проверка секретов
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          SESSION_STRING: ${{ secrets.SESSION_STRING }}
+        run: |
+          python - <<'PY'
+          import os
+          print("API_ID:", "OK" if os.getenv("API_ID") else "EMPTY")
+          print("API_HASH:", "OK" if os.getenv("API_HASH") else "EMPTY")
+          s = os.getenv("SESSION_STRING", "")
+          print("SESSION_STRING:", "OK" if s else "EMPTY")
+          print("SESSION_STRING_LEN:", len(s))
+          PY
 
       - name: Запуск парсера
         env:
