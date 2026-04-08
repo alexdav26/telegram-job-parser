@@ -12,6 +12,7 @@ from telethon.sessions import StringSession
 api_id = int(os.getenv("API_ID", "2040"))
 api_hash = os.getenv("API_HASH", "b18441a1ff607e10a989891a5462e627")
 session_string = os.getenv("SESSION_STRING", "")
+github_event_name = os.getenv("GITHUB_EVENT_NAME", "")
 
 sources_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJXb9M9fgCWtRWdmo-8Uv3wkkwbnP6L71Nfwwt9V7HCF5zSWheBduunl0WA9gykUGWqjq6I-sqKw92/pub?gid=1276245514&single=true&output=csv"
 
@@ -74,11 +75,11 @@ def load_seen_from_csv(url):
     return set(line.strip() for line in lines[1:] if line.strip())
 
 
-def append_seen_to_sheet(writer_url, unique_id):
-    payload = json.dumps({"message_id": unique_id}).encode("utf-8")
+def post_json(url, payload_dict):
+    payload = json.dumps(payload_dict).encode("utf-8")
 
     request = Request(
-        writer_url,
+        url,
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST"
@@ -87,10 +88,23 @@ def append_seen_to_sheet(writer_url, unique_id):
     with urlopen(request) as response:
         raw = response.read().decode("utf-8")
 
-    result = json.loads(raw)
+    return json.loads(raw)
+
+
+def append_seen_to_sheet(writer_url, unique_id):
+    result = post_json(writer_url, {"message_id": unique_id})
 
     if not result.get("ok"):
         raise RuntimeError(f"Ошибка записи seen_id: {result}")
+
+    return result
+
+
+def update_setting_value(settings_writer_url, key, value):
+    result = post_json(settings_writer_url, {"key": key, "value": value})
+
+    if not result.get("ok"):
+        raise RuntimeError(f"Ошибка записи settings: {result}")
 
     return result
 
@@ -210,8 +224,61 @@ def build_message(template, formatted_date, channel, score, link, preview, match
     return "\n".join(parts)
 
 
+def parse_bool(value, default=False):
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def should_run_now(settings):
+    auto_run = parse_bool(settings.get("auto_run", "FALSE"), False)
+    interval_min = int(settings.get("run_interval_min", "30"))
+    last_auto_run_utc = settings.get("last_auto_run_utc", "").strip()
+
+    # Ручной запуск из GitHub-кнопки всегда разрешаем
+    if github_event_name == "workflow_dispatch":
+        print("режим запуска: ручной")
+        return True, auto_run, interval_min
+
+    # Автозапуск по расписанию — только если включён
+    if github_event_name == "schedule":
+        print("режим запуска: расписание")
+        if not auto_run:
+            print("auto_run = FALSE -> выходим без работы")
+            return False, auto_run, interval_min
+
+        if not last_auto_run_utc:
+            print("last_auto_run_utc пустой -> запускаемся")
+            return True, auto_run, interval_min
+
+        try:
+            last_run = datetime.fromisoformat(last_auto_run_utc.replace("Z", "+00:00"))
+        except Exception:
+            print("last_auto_run_utc повреждён -> запускаемся")
+            return True, auto_run, interval_min
+
+        now_utc = datetime.now(timezone.utc)
+        diff = now_utc - last_run
+
+        if diff >= timedelta(minutes=interval_min):
+            print(f"прошло {diff}, интервал {interval_min} мин -> запускаемся")
+            return True, auto_run, interval_min
+
+        print(f"ещё не прошло {interval_min} мин -> выходим без работы")
+        return False, auto_run, interval_min
+
+    # На push лучше не гонять реальную работу
+    if github_event_name == "push":
+        print("режим запуска: push -> выходим без работы")
+        return False, auto_run, interval_min
+
+    # На всякий случай всё остальное пропускаем
+    print(f"неизвестный режим запуска: {github_event_name!r} -> выходим без работы")
+    return False, auto_run, interval_min
+
+
 async def process_channel(channel, config, seen_ids):
-    print(f"\n📡 Обрабатываю: {channel}")
+    print(f"\n📡 Обработка: {channel}")
 
     async for message in client.iter_messages(channel, limit=config["limit"]):
         text = message.message or ""
@@ -280,6 +347,12 @@ async def main():
     template = load_key_value_csv(sources["template_url"])
     seen_ids = load_seen_from_csv(sources["seen_ids_url"])
 
+    do_run, auto_run, interval_min = should_run_now(settings)
+
+    if not do_run:
+        print("⏭️ запуск пропущен")
+        return
+
     config = {
         "skip": skip_words,
         "high": high_words,
@@ -294,19 +367,28 @@ async def main():
         "cutoff": datetime.now(timezone.utc) - timedelta(days=int(settings.get("days_back", 90))),
         "sent": 0,
         "seen_writer_url": sources["seen_writer_url"],
+        "settings_writer_url": sources.get("settings_writer_url", ""),
     }
 
     print(f"каналов: {len(channels)}")
-    print(f"limit: {config['limit']}")
-    print(f"threshold: {config['threshold']}")
-    print(f"weights: {len(weight_rules)}")
-    print(f"беру не старше: {config['cutoff'].strftime('%d.%m.%Y %H:%M UTC')}")
-    print(f"уже обработано: {len(seen_ids)}\n")
+    print(f"ограничение: {config['limit']}")
+    print(f"порог: {config['threshold']}")
+    print(f"вес: {len(weight_rules)}")
+    print(f"беру не старше: {config['cutoff'].strftime('%d.%m.%Y, %H:%M UTC')}")
+    print(f"уже обработано: {len(seen_ids)}")
+    print(f"auto_run: {auto_run}")
+    print(f"run_interval_min: {interval_min}")
 
     tasks = [process_channel(channel, config, seen_ids) for channel in channels]
     await asyncio.gather(*tasks)
 
     print(f"\n✅ отправлено: {config['sent']}")
+
+    # Обновляем время только для запуска по расписанию
+    if github_event_name == "schedule" and config["settings_writer_url"]:
+        now_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        update_setting_value(config["settings_writer_url"], "last_auto_run_utc", now_utc)
+        print(f"🕒 last_auto_run_utc обновлён: {now_utc}")
 
 
 async def runner():
