@@ -269,6 +269,10 @@ def should_run_now(settings):
 
     # На push лучше не гонять реальную работу
     if github_event_name == "push":
+    # если это ручной запуск — всё равно разрешаем
+    if os.getenv("GITHUB_RUN_ID"):
+        print("push, но через GitHub Actions → разрешаем запуск")
+    else:
         print("режим запуска: push -> выходим без работы")
         return False, auto_run, interval_min
 
