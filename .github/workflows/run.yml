@@ -1,34 +1,31 @@
-name: Run Parser
+name: Telegram Parser
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "*/10 * * * *"
 
 jobs:
-  run:
+  run-parser:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Скачать репозиторий
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Установить Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Установить зависимости
+      - name: Install dependencies
         run: |
-          pip install telethon
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Запуск парсера
+      - name: Run parser
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
           SESSION_STRING: ${{ secrets.SESSION_STRING }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
-        run: |
-          python parser.py
         run: |
           python parser.py
