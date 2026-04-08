@@ -21,11 +21,28 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+      - name: Check secrets
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          SESSION_STRING: ${{ secrets.SESSION_STRING }}
+          APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
+        run: |
+          python - << 'PY'
+          import os
+          print("API_ID:", "OK" if os.getenv("API_ID") else "MISSING")
+          print("API_HASH:", "OK" if os.getenv("API_HASH") else "MISSING")
+          print("SESSION_STRING:", "OK" if os.getenv("SESSION_STRING") else "MISSING")
+          print("APPS_SCRIPT_URL:", "OK" if os.getenv("APPS_SCRIPT_URL") else "MISSING")
+          PY
+
       - name: Run parser
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
           SESSION_STRING: ${{ secrets.SESSION_STRING }}
+          APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
           python parser.py
