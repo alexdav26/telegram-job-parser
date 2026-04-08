@@ -2,7 +2,8 @@ name: Run Parser
 
 on:
   workflow_dispatch:
-  push:
+  schedule:
+    - cron: "*/10 * * * *"
 
 jobs:
   run:
@@ -21,18 +22,13 @@ jobs:
         run: |
           pip install telethon
 
-      - name: Проверка секретов
-        env:
-          API_ID: ${{ secrets.API_ID }}
-          API_HASH: ${{ secrets.API_HASH }}
-          SESSION_STRING: ${{ secrets.SESSION_STRING }}
-        run: |
-          python -c "import os; print('API_ID:', 'OK' if os.getenv('API_ID') else 'EMPTY'); print('API_HASH:', 'OK' if os.getenv('API_HASH') else 'EMPTY'); s=os.getenv('SESSION_STRING',''); print('SESSION_STRING:', 'OK' if s else 'EMPTY'); print('SESSION_STRING_LEN:', len(s))"
-
       - name: Запуск парсера
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
           SESSION_STRING: ${{ secrets.SESSION_STRING }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python parser.py
         run: |
           python parser.py
