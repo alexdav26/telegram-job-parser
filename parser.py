@@ -75,13 +75,10 @@ def load_seen_from_csv(url):
     return set(line.strip() for line in lines[1:] if line.strip())
 
 
-def append_seen_to_sheet(writer_url, unique_id):
-    payload = json.dumps({"message_id": unique_id}).encode("utf-8")
 def post_json(url, payload_dict):
     payload = json.dumps(payload_dict).encode("utf-8")
 
     request = Request(
-        writer_url,
         url,
         data=payload,
         headers={"Content-Type": "application/json"},
@@ -91,7 +88,6 @@ def post_json(url, payload_dict):
     with urlopen(request) as response:
         raw = response.read().decode("utf-8")
 
-    result = json.loads(raw)
     return json.loads(raw)
 
 
@@ -239,14 +235,13 @@ def should_run_now(settings):
     interval_min = int(settings.get("run_interval_min", "30"))
     last_auto_run_utc = settings.get("last_auto_run_utc", "").strip()
 
-    # Ручной запуск из GitHub-кнопки всегда разрешаем
     if github_event_name == "workflow_dispatch":
         print("режим запуска: ручной")
         return True, auto_run, interval_min
 
-    # Автозапуск по расписанию — только если включён
     if github_event_name == "schedule":
         print("режим запуска: расписание")
+
         if not auto_run:
             print("auto_run = FALSE -> выходим без работы")
             return False, auto_run, interval_min
@@ -271,18 +266,15 @@ def should_run_now(settings):
         print(f"ещё не прошло {interval_min} мин -> выходим без работы")
         return False, auto_run, interval_min
 
-    # На push лучше не гонять реальную работу
     if github_event_name == "push":
         print("режим запуска: push -> выходим без работы")
         return False, auto_run, interval_min
 
-    # На всякий случай всё остальное пропускаем
     print(f"неизвестный режим запуска: {github_event_name!r} -> выходим без работы")
     return False, auto_run, interval_min
 
 
 async def process_channel(channel, config, seen_ids):
-    print(f"\n📡 Обрабатываю: {channel}")
     print(f"\n📡 Обработка: {channel}")
 
     async for message in client.iter_messages(channel, limit=config["limit"]):
@@ -376,11 +368,6 @@ async def main():
     }
 
     print(f"каналов: {len(channels)}")
-    print(f"limit: {config['limit']}")
-    print(f"threshold: {config['threshold']}")
-    print(f"weights: {len(weight_rules)}")
-    print(f"беру не старше: {config['cutoff'].strftime('%d.%m.%Y %H:%M UTC')}")
-    print(f"уже обработано: {len(seen_ids)}\n")
     print(f"ограничение: {config['limit']}")
     print(f"порог: {config['threshold']}")
     print(f"вес: {len(weight_rules)}")
@@ -394,7 +381,6 @@ async def main():
 
     print(f"\n✅ отправлено: {config['sent']}")
 
-    # Обновляем время только для запуска по расписанию
     if github_event_name == "schedule" and config["settings_writer_url"]:
         now_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         update_setting_value(config["settings_writer_url"], "last_auto_run_utc", now_utc)
