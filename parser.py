@@ -12,7 +12,7 @@ from telethon.sessions import StringSession
 api_id = int(os.getenv("API_ID", "2040"))
 api_hash = os.getenv("API_HASH", "b18441a1ff607e10a989891a5462e627")
 session_string = os.getenv("SESSION_STRING", "")
-github_event_name = os.getenv("GITHUB_EVENT_NAME", "").strip().lower()
+github_event_name = os.getenv("GITHUB_EVENT_NAME", "")
 
 sources_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJXb9M9fgCWtRWdmo-8Uv3wkkwbnP6L71Nfwwt9V7HCF5zSWheBduunl0WA9gykUGWqjq6I-sqKw92/pub?gid=1276245514&single=true&output=csv"
 
@@ -232,15 +232,7 @@ def parse_bool(value, default=False):
 
 def should_run_now(settings):
     auto_run = parse_bool(settings.get("auto_run", "FALSE"), False)
-
-    try:
-        interval_min = int(settings.get("run_interval_min", "30"))
-    except Exception:
-        interval_min = 30
-
-    if interval_min < 1:
-        interval_min = 1
-
+    interval_min = int(settings.get("run_interval_min", "30"))
     last_auto_run_utc = settings.get("last_auto_run_utc", "").strip()
 
     # Ручной запуск из GitHub-кнопки всегда разрешаем
@@ -251,7 +243,6 @@ def should_run_now(settings):
     # Автозапуск по расписанию — только если включён
     if github_event_name == "schedule":
         print("режим запуска: расписание")
-
         if not auto_run:
             print("auto_run = FALSE -> выходим без работы")
             return False, auto_run, interval_min
@@ -276,18 +267,14 @@ def should_run_now(settings):
         print(f"ещё не прошло {interval_min} мин -> выходим без работы")
         return False, auto_run, interval_min
 
-    # Push из GitHub не должен запускать реальную работу
+    # На push лучше не гонять реальную работу
     if github_event_name == "push":
         print("режим запуска: push -> выходим без работы")
         return False, auto_run, interval_min
 
-    # Локальный запуск или любой другой неизвестный режим — разрешаем
-    if os.getenv("GITHUB_RUN_ID"):
-        print(f"запуск из GitHub Actions, нестандартный режим: {github_event_name!r}")
-    else:
-        print(f"локальный или нестандартный режим запуска: {github_event_name!r}")
-
-    return True, auto_run, interval_min
+    # На всякий случай всё остальное пропускаем
+    print(f"неизвестный режим запуска: {github_event_name!r} -> выходим без работы")
+    return False, auto_run, interval_min
 
 
 async def process_channel(channel, config, seen_ids):
